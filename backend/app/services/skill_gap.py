@@ -40,6 +40,26 @@ ROLE_REQUIREMENTS = {
         "critical": ["Python", "Machine Learning", "Deep Learning", "PyTorch", "TensorFlow"],
         "important": ["NLP", "Computer Vision", "MLOps", "FastAPI", "Docker"],
         "nice_to_have": ["LangChain", "Hugging Face", "AWS", "Vector Databases", "LLMs"]
+    },
+    "mobile developer": {
+        "critical": ["JavaScript", "React Native", "Mobile Development", "Git", "API"],
+        "important": ["TypeScript", "Firebase", "Redux", "UI/UX", "Android"],
+        "nice_to_have": ["iOS", "Flutter", "Swift", "Kotlin", "GraphQL"]
+    },
+    "cloud engineer": {
+        "critical": ["AWS", "Cloud", "Linux", "Docker", "Networking"],
+        "important": ["Kubernetes", "Terraform", "Python", "CI/CD", "Security"],
+        "nice_to_have": ["Azure", "GCP", "Ansible", "Prometheus", "Bash"]
+    },
+    "cybersecurity analyst": {
+        "critical": ["Networking", "Security", "Linux", "Python", "SIEM"],
+        "important": ["Penetration Testing", "Firewalls", "Incident Response", "Cloud Security", "Git"],
+        "nice_to_have": ["Ethical Hacking", "Cryptography", "AWS", "Docker", "Compliance"]
+    },
+    "product manager": {
+        "critical": ["Product Management", "Communication", "Agile", "User Research", "Roadmapping"],
+        "important": ["Data Analysis", "SQL", "UI/UX", "Stakeholder Management", "Jira"],
+        "nice_to_have": ["A/B Testing", "Market Research", "Python", "Figma", "Analytics"]
     }
 }
 
@@ -65,15 +85,19 @@ LEARNING_RESOURCES = {
     "Statistics": "Statistics with Python on Coursera",
     "FastAPI": "FastAPI Official Tutorial",
     "Linux": "Linux Journey or freeCodeCamp Linux course",
-    "Kubernetes": "Kubernetes Official Basics + free courses on YouTube",
+    "Kubernetes": "Kubernetes Official Basics",
     "Power BI": "Microsoft Power BI free learning path",
     "Tableau": "Tableau free training videos",
     "Express": "Express.js documentation + freeCodeCamp",
     "Scikit-learn": "Scikit-learn official tutorials",
-    "OpenCV": "OpenCV Python tutorials"
+    "OpenCV": "OpenCV Python tutorials",
+    "React Native": "React Native Official Docs + freeCodeCamp",
+    "Firebase": "Firebase Official Documentation",
+    "Terraform": "HashiCorp Terraform Tutorials",
+    "LangChain": "LangChain Official Documentation",
+    "Hugging Face": "Hugging Face Course"
 }
 
-# Mapping for better matching (aliases)
 SKILL_ALIASES = {
     "react.js": "react",
     "reactjs": "react",
@@ -95,12 +119,12 @@ SKILL_ALIASES = {
     "ml": "machine learning",
     "dl": "deep learning",
     "cv": "computer vision",
-    "nlp": "nlp",
+    "react native": "react native",
+    "reactnative": "react native",
 }
 
 def normalize_skill(skill: str) -> str:
     s = skill.lower().strip()
-    # Remove common suffixes
     s = s.replace(".js", "").replace(".ts", "")
     return SKILL_ALIASES.get(s, s)
 
@@ -113,8 +137,6 @@ def calculate_skill_gap(user_skills: List[Dict], target_role: str) -> Dict:
         }
 
     requirements = ROLE_REQUIREMENTS[role]
-    
-    # Normalize user skills
     user_skill_names = {normalize_skill(skill["name"]) for skill in user_skills}
 
     def check_skills(skill_list):
@@ -132,7 +154,6 @@ def calculate_skill_gap(user_skills: List[Dict], target_role: str) -> Dict:
     important_has, important_missing = check_skills(requirements["important"])
     nice_has, nice_missing = check_skills(requirements["nice_to_have"])
 
-    # Calculate match score
     total_critical = len(requirements["critical"])
     total_important = len(requirements["important"])
     
@@ -144,7 +165,6 @@ def calculate_skill_gap(user_skills: List[Dict], target_role: str) -> Dict:
     if len(requirements["nice_to_have"]) > 0:
         score += (len(nice_has) / len(requirements["nice_to_have"])) * 10
 
-    # Learning path
     missing_skills = critical_missing + important_missing
     learning_path = []
     for skill in missing_skills:

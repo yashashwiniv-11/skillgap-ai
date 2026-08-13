@@ -1,20 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
 from app.services.resume_parser import extract_text_from_pdf
 from app.services.skill_extractor import extract_skills
 from app.services.skill_gap import calculate_skill_gap
+from app.services.job_matcher import get_recommended_jobs
 
 router = APIRouter()
-
-class Skill(BaseModel):
-    name: str
-    category: str
-    confidence: float
-
-class GapRequest(BaseModel):
-    skills: List[Skill]
-    target_role: str
 
 @router.post("/upload")
 async def upload_resume(file: UploadFile = File(...)):
@@ -34,6 +24,7 @@ async def upload_resume(file: UploadFile = File(...)):
     if not text.strip():
         raise HTTPException(status_code=400, detail="No text could be extracted")
 
+    # Extract skills using Groq
     skills = extract_skills(text)
 
     return {
@@ -43,14 +34,32 @@ async def upload_resume(file: UploadFile = File(...)):
         "skills": skills
     }
 
+
 @router.post("/skill-gap")
-async def get_skill_gap(request: GapRequest):
-    result = calculate_skill_gap(
-        user_skills=[skill.dict() for skill in request.skills],
-        target_role=request.target_role
-    )
-    
-    if "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
-    
+async def skill_gap_analysis(payload: dict):
+    skills = payload.get("skills", [])
+    target_role = payload.get("target_role", "")
+
+    if not skills:
+        raise HTTPException(status_code=400, detail="Skills are required")
+    if not target_role:
+        raise HTTPException(status_code=400, detail="Target role is required")
+
+    result = calculate_skill_gap(skills, target_role)
     return result
+
+
+@router.post("/jobs")
+async def get_jobs(payload: dict):
+    target_role = payload.get("target_role", "")
+
+    if not target_role:
+        raise HTTPException(status_code=400, detail="target_role is required")
+
+    jobs = get_recommended_jobs(target_role)
+
+    return {
+        "target_role": target_role,
+        "jobs": jobs,
+        "count": len(jobs)
+    }

@@ -1,10 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.routes import profiles
+from app.core.database import engine, Base
+from app.api.routes import profiles, auth
+
+# Create database tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -13,13 +18,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routes
-app.include_router(profiles.router, prefix="/api/v1/profiles", tags=["Profiles"])
+# Include routers
+app.include_router(profiles.router, prefix=f"{settings.API_V1_STR}/profiles", tags=["profiles"])
+app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
 
 @app.get("/")
 def root():
     return {"message": "SkillGap AI Backend is running!"}
-
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}

@@ -6,6 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
 
 interface Skill {
   name: string;
@@ -75,6 +84,77 @@ const ROLES = [
   "Product Manager",
 ];
 
+function SkillsSkeleton() {
+  return (
+    <Card className="shadow-xl border-0 dark:bg-slate-800 animate-pulse">
+      <CardHeader>
+        <div className="h-6 w-48 bg-slate-200 dark:bg-slate-700 rounded" />
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-8 rounded-full bg-slate-200 dark:bg-slate-700"
+              style={{ width: `${60 + (i % 5) * 20}px` }}
+            />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ChartSkeleton() {
+  return (
+    <Card className="shadow-xl border-0 dark:bg-slate-800 animate-pulse">
+      <CardHeader>
+        <div className="h-6 w-56 bg-slate-200 dark:bg-slate-700 rounded mb-2" />
+        <div className="h-4 w-40 bg-slate-200 dark:bg-slate-700 rounded" />
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="space-y-1">
+            <div className="flex justify-between">
+              <div className="h-4 w-24 bg-slate-200 dark:bg-slate-700 rounded" />
+              <div className="h-4 w-12 bg-slate-200 dark:bg-slate-700 rounded" />
+            </div>
+            <div className="h-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full" />
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function GapSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <Card className="shadow-xl border-0 dark:bg-slate-800">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div className="h-6 w-48 bg-slate-200 dark:bg-slate-700 rounded" />
+            <div className="h-10 w-16 bg-slate-200 dark:bg-slate-700 rounded" />
+          </div>
+          <div className="h-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full mt-3" />
+        </CardHeader>
+      </Card>
+      <Card className="shadow-xl border-0 dark:bg-slate-800">
+        <CardHeader>
+          <div className="h-6 w-32 bg-slate-200 dark:bg-slate-700 rounded" />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-7 w-20 bg-slate-200 dark:bg-slate-700 rounded-full" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -91,6 +171,36 @@ export default function Home() {
   const [jobsLoading, setJobsLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
+  const loadHistoryFromBackend = async (currentUser?: User | null) => {
+    try {
+      const u = currentUser !== undefined ? currentUser : user;
+      const url = u?.id
+        ? `http://127.0.0.1:8000/api/v1/profiles/history?user_id=${u.id}`
+        : "http://127.0.0.1:8000/api/v1/profiles/history";
+
+      const response = await fetch(url);
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (data.history && data.history.length > 0) {
+        const formatted = data.history.map((item: any) => ({
+          id: String(item.id),
+          date: item.date,
+          filename: item.filename,
+          target_role: item.target_role,
+          match_score: item.match_score,
+          skills_count: item.skills_count,
+          gapResult: item.gap_result,
+          skills: item.skills,
+        }));
+        setHistory(formatted);
+        localStorage.setItem("skillgap_history", JSON.stringify(formatted));
+      }
+    } catch (err) {
+      console.error("Failed to load history from backend:", err);
+    }
+  };
+
   useEffect(() => {
     const savedHistory = localStorage.getItem("skillgap_history");
     if (savedHistory) {
@@ -99,10 +209,12 @@ export default function Home() {
       } catch (e) {}
     }
 
+    let parsedUser: User | null = null;
     const savedUser = localStorage.getItem("user");
     if (savedUser) {
       try {
-        setUser(JSON.parse(savedUser));
+        parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
       } catch (e) {}
     }
 
@@ -111,7 +223,15 @@ export default function Home() {
       setDarkMode(true);
       document.documentElement.classList.add("dark");
     }
+
+    loadHistoryFromBackend(parsedUser);
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      loadHistoryFromBackend(user);
+    }
+  }, [user]);
 
   const toggleDarkMode = () => {
     const newMode = !darkMode;
@@ -141,9 +261,28 @@ export default function Home() {
       gapResult: gap,
       skills,
     };
-    const updated = [newItem, ...history].slice(0, 10);
+    const updated = [newItem, ...history].slice(0, 20);
     setHistory(updated);
     localStorage.setItem("skillgap_history", JSON.stringify(updated));
+  };
+
+  const saveAnalysisToBackend = async (gap: GapResult, skills: Skill[], filename: string) => {
+    try {
+      await fetch("http://127.0.0.1:8000/api/v1/profiles/save-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename,
+          target_role: gap.target_role,
+          match_score: gap.match_score,
+          skills,
+          gap_result: gap,
+          user_id: user?.id || null,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to save analysis to backend:", err);
+    }
   };
 
   const fetchJobs = async (role: string) => {
@@ -212,6 +351,7 @@ export default function Home() {
       const data: GapResult = await response.json();
       setGapResult(data);
       saveToHistory(data, result.skills, result.filename);
+      saveAnalysisToBackend(data, result.skills, result.filename);
       fetchJobs(targetRole);
     } catch (err) {
       setError("Failed to analyze skill gap.");
@@ -264,28 +404,23 @@ export default function Home() {
 
     addText("SKILLGAP AI - CAREER ANALYSIS REPORT", 16, true);
     y += 4;
-
     addText(`Resume: ${result.filename}`);
     addText(`Target Role: ${gapResult.target_role}`);
     addText(`Match Score: ${gapResult.match_score}%`, 11, true);
     y += 4;
-
     addText("EXTRACTED SKILLS", 13, true);
     result.skills.forEach((s) => {
       addText(`• ${s.name} (${s.category}) - ${Math.round(s.confidence * 100)}%`);
     });
     y += 4;
-
     addText("CRITICAL SKILLS", 13, true);
     addText(`You have: ${gapResult.critical.has.join(", ") || "None"}`);
     addText(`Missing: ${gapResult.critical.missing.join(", ") || "None"}`);
     y += 4;
-
     addText("IMPORTANT SKILLS", 13, true);
     addText(`You have: ${gapResult.important.has.join(", ") || "None"}`);
     addText(`Missing: ${gapResult.important.missing.join(", ") || "None"}`);
     y += 4;
-
     if (gapResult.learning_path.length > 0) {
       addText("LEARNING PATH", 13, true);
       gapResult.learning_path.forEach((item) => {
@@ -293,10 +428,8 @@ export default function Home() {
         addText(`  ${item.resource}`, 10);
       });
     }
-
     y += 6;
     addText("Generated by SkillGap AI", 10);
-
     doc.save(`SkillGap_Report_${gapResult.target_role.replace(/\s+/g, "_")}.pdf`);
   };
 
@@ -310,6 +443,21 @@ export default function Home() {
     return Object.entries(counts)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
+  };
+
+  const getRadarData = () => {
+    if (!result) return [];
+    const counts: Record<string, number> = {};
+    result.skills.forEach((s) => {
+      const cat = s.category || "Other";
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    const max = Math.max(...Object.values(counts), 1);
+    return Object.entries(counts).map(([category, count]) => ({
+      category,
+      value: Math.round((count / max) * 100),
+      fullMark: 100,
+    }));
   };
 
   const getCategoryColor = (category: string) => {
@@ -353,12 +501,12 @@ export default function Home() {
   const maxCount = categoryStats.length > 0 ? Math.max(...categoryStats.map((c) => c.count)) : 1;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 py-12 px-4 transition-colors">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 py-10 sm:py-12 px-3 sm:px-4 transition-colors">
+      <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
 
         {/* HEADER */}
         <div className="text-center space-y-3">
-          <div className="flex justify-end mb-2 gap-2">
+          <div className="flex justify-end mb-2 gap-2 flex-wrap">
             <Button
               variant="outline"
               size="sm"
@@ -369,8 +517,8 @@ export default function Home() {
             </Button>
 
             {user ? (
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-slate-600 dark:text-slate-300">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className="text-sm text-slate-600 dark:text-slate-300 truncate max-w-[120px] sm:max-w-none">
                   Hi, <span className="font-medium">{user.full_name || user.email}</span>
                 </span>
                 <Button variant="outline" size="sm" onClick={handleLogout} className="dark:border-slate-600 dark:text-slate-200">
@@ -389,10 +537,10 @@ export default function Home() {
             )}
           </div>
 
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
             SkillGap AI
           </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto px-2">
             Upload your resume → Extract skills → Analyze skill gaps → Get personalized learning path
           </p>
 
@@ -413,11 +561,11 @@ export default function Home() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="dark:text-white">Analysis History</CardTitle>
-                <CardDescription className="dark:text-slate-400">Your last 10 analyses</CardDescription>
+                <CardDescription className="dark:text-slate-400">Saved analyses</CardDescription>
               </div>
               {history.length > 0 && (
                 <Button variant="outline" size="sm" onClick={clearHistory} className="text-red-600 border-red-200">
-                  Clear All
+                  Clear Local
                 </Button>
               )}
             </CardHeader>
@@ -432,13 +580,13 @@ export default function Home() {
                       className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition dark:bg-slate-700 dark:border-slate-600 dark:hover:bg-slate-600"
                       onClick={() => loadHistoryItem(item)}
                     >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-medium text-slate-900 dark:text-white">{item.target_role}</p>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">{item.filename}</p>
+                      <div className="flex justify-between items-start gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900 dark:text-white truncate">{item.target_role}</p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{item.filename}</p>
                           <p className="text-xs text-slate-400 mt-1">{item.date}</p>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           <p className={`text-xl font-bold ${getScoreColor(item.match_score)}`}>
                             {item.match_score}%
                           </p>
@@ -470,7 +618,7 @@ export default function Home() {
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
                 className="dark:bg-slate-700 dark:border-slate-600 dark:text-white"
               />
-              {file && <p className="text-sm text-slate-500 dark:text-slate-400">Selected: {file.name}</p>}
+              {file && <p className="text-sm text-slate-500 dark:text-slate-400 truncate">Selected: {file.name}</p>}
             </div>
 
             <Button
@@ -490,8 +638,16 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {/* SKILLS + CHART */}
-        {result && (
+        {/* LOADING SKELETONS */}
+        {loading && (
+          <>
+            <SkillsSkeleton />
+            <ChartSkeleton />
+          </>
+        )}
+
+        {/* SKILLS + CHART + RADAR */}
+        {result && !loading && (
           <>
             <Card className="shadow-xl border-0 dark:bg-slate-800">
               <CardHeader>
@@ -543,11 +699,54 @@ export default function Home() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* RADAR CHART */}
+            <Card className="shadow-xl border-0 dark:bg-slate-800">
+              <CardHeader>
+                <CardTitle className="dark:text-white">Skill Strength Radar</CardTitle>
+                <CardDescription className="dark:text-slate-400">
+                  Visual overview of your skill distribution
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="w-full h-72 sm:h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={getRadarData()}>
+                      <PolarGrid stroke={darkMode ? "#475569" : "#e2e8f0"} />
+                      <PolarAngleAxis
+                        dataKey="category"
+                        tick={{ fill: darkMode ? "#cbd5e1" : "#475569", fontSize: 11 }}
+                      />
+                      <PolarRadiusAxis
+                        angle={30}
+                        domain={[0, 100]}
+                        tick={{ fill: darkMode ? "#94a3b8" : "#64748b", fontSize: 10 }}
+                      />
+                      <Radar
+                        name="Skills"
+                        dataKey="value"
+                        stroke="#6366f1"
+                        fill="#6366f1"
+                        fillOpacity={0.45}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: darkMode ? "#1e293b" : "#fff",
+                          border: "1px solid #334155",
+                          borderRadius: "8px",
+                          color: darkMode ? "#e2e8f0" : "#0f172a",
+                        }}
+                      />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
           </>
         )}
 
         {/* SKILL GAP */}
-        {result && (
+        {result && !loading && (
           <Card className="shadow-xl border-0 dark:bg-slate-800">
             <CardHeader>
               <CardTitle className="text-xl dark:text-white">2. Skill Gap Analysis</CardTitle>
@@ -579,8 +778,10 @@ export default function Home() {
           </Card>
         )}
 
+        {gapLoading && <GapSkeleton />}
+
         {/* RESULTS */}
-        {gapResult && (
+        {gapResult && !gapLoading && (
           <div className="space-y-6">
             <Card className="shadow-xl border-0 overflow-hidden dark:bg-slate-800">
               <div className="h-1.5 bg-gradient-to-r from-blue-500 to-indigo-500" />
@@ -683,7 +884,6 @@ export default function Home() {
               </Card>
             )}
 
-            {/* RECOMMENDED JOBS */}
             {(jobsLoading || jobs.length > 0) && (
               <Card className="shadow-xl border-0 dark:bg-slate-800">
                 <CardHeader>

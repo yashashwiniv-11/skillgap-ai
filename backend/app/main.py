@@ -4,6 +4,10 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.routes import profiles, auth
 
+# Import models so tables are created
+from app.models.user import User
+from app.models.analysis import Analysis
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
